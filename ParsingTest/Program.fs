@@ -1,36 +1,28 @@
-// Learn more about F# at http://docs.microsoft.com/dotnet/fsharp
-
 open System
 open FParsec
 
 type Expr = Num of float
 
 let expr, exprRef = createParserForwardedToRef<Expr, unit>()
-
-let pAtom : Parser<Expr, unit> -> Parser<Expr, unit> = between (pstring "(") (pstring ")")
-let pOperationBuilder op = pipe2 (spaces |>> ignore >>. pstring op >>. spaces >>. pfloat) (spaces >>. pfloat) 
-let pOperationBuilder2 op = pipe2 (spaces |>> ignore >>. pstring op >>. spaces >>. expr) (spaces >>. expr) 
-let pPlus = pOperationBuilder2 "+" (fun (Num a) (Num b) -> Num (a + b))
-let pTimes = pOperationBuilder2 "*" (fun (Num a) (Num b) -> Num (a * b))
+let pAtom : Parser<Expr, unit> -> Parser<Expr, unit> = between (spaces >>? pstring "(") (spaces >>? pstring ")")
+let NumOp op = fun (Num a) (Num b) -> Num (op a b)
+let pOperationBuilder opString op = pipe2 (spaces >>? pstring opString >>? spaces1 >>. expr) (spaces >>? expr) (NumOp op)
+let pPlus = pOperationBuilder "+" (+)
+let pTimes = pOperationBuilder "*" (*)
+let pDiv = pOperationBuilder "/" (/)
+let pSub = pOperationBuilder "-" (-)
 let pNum = pfloat |>> Num
-
-let pExpr = spaces >>. pAtom expr .>> spaces
-
-do exprRef := choice [
-   pTimes
-   pPlus
-   pNum
-   pExpr
-]
+let pAtomExpr = spaces >>? pAtom expr .>>? spaces
+do exprRef := choice [pTimes; pPlus; pDiv; pSub; pNum; pAtomExpr; ]
+let pExpr = spaces >>? expr .>>? spaces .>> eof
 
 let rec loop() =
-    Console.WriteLine "Enter in a + expression in rpn"
+    Console.WriteLine "Enter in an expression in reverse polish notation, i.e. \"+ 3 4\", \"(* 3 (+ 4 5))\" etc."
     Console.ReadLine()
     |> run pExpr
     |> (fun x ->
         match x with
         | Success (Num f, _, _) -> Console.WriteLine f
-        | Success (e, _, _) -> Console.WriteLine e
         | Failure (e, _, _) -> Console.WriteLine e
     )
     loop()
